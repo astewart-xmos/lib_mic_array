@@ -4,6 +4,7 @@
 #include <platform.h>
 #include <xs1.h>
 #include <xcore/hwtimer.h>
+#include <xcore/port.h>
 #include <xcore/assert.h>
 #include "app_pll_ctrl.h"
 

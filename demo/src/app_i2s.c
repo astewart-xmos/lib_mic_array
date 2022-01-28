@@ -53,8 +53,8 @@ void proc_pcm_user(int32_t pcm_frame[])
 
 
 I2S_CALLBACK_ATTR
-static 
-void app_i2s_init(app_i2s_data_t* app_data, 
+static
+void app_i2s_init(app_i2s_data_t* app_data,
                   i2s_config_t* config)
 {
   printf("[I2S Init]\n");
@@ -67,7 +67,7 @@ void app_i2s_init(app_i2s_data_t* app_data,
 }
 
 I2S_CALLBACK_ATTR
-static 
+static
 i2s_restart_t app_i2s_restart(app_i2s_data_t* app_data)
 {
   static unsigned do_restart = 0;
@@ -78,8 +78,8 @@ i2s_restart_t app_i2s_restart(app_i2s_data_t* app_data)
 
 I2S_CALLBACK_ATTR
 static
-void app_i2s_receive(app_i2s_data_t* app_data, 
-                     size_t num_in, 
+void app_i2s_receive(app_i2s_data_t* app_data,
+                     size_t num_in,
                      const int32_t* samples)
 {
   // printf("[I2S Receive]\n");
@@ -89,7 +89,7 @@ void app_i2s_receive(app_i2s_data_t* app_data,
 I2S_CALLBACK_ATTR
 static
 void app_i2s_send(app_i2s_data_t* app_data,
-                  size_t num_out, 
+                  size_t num_out,
                   int32_t* samples)
 {
   if(app_data->t == 0){
@@ -118,17 +118,28 @@ i2s_callback_group_t i2s_context = {
 
 void app_i2s_task()
 {
-
+#if XVF3610_Q60A
   port_t p_i2s_dout[] = { I2S_DATA_IN };
-  // port_t p_i2s_din[]  = { I2S_DATA_IN };
   port_t p_i2s_din[0];
 
-  i2s_master(&i2s_context, 
+  i2s_master(&i2s_context,
              p_i2s_dout, 1,
              p_i2s_din,  0,
-             PORT_I2S_BCLK, 
-             PORT_I2S_LRCLK, 
+             PORT_I2S_BCLK,
+             PORT_I2S_LRCLK,
              PORT_MCLK_IN_OUT,
              I2S_CLKBLK);
+#elif XCOREAI_EXPLORER
+  port_t p_i2s_dout[] = { PORT_I2S_DAC_DATA };
+  port_t p_i2s_din[0];
+
+  i2s_master(&i2s_context,
+             p_i2s_dout, 1,
+             p_i2s_din,  0,
+             PORT_I2S_BCLK,
+             PORT_I2S_LRCLK,
+             PORT_MCLK_IN,
+             I2S_CLKBLK);
+#endif
 
 }

@@ -61,17 +61,17 @@ void app_mic_array_setup_resources()
 
   if( N_MICS == 1 ){
     mic_array_setup_sdr((unsigned) MIC_ARRAY_CLK1,
-                        (unsigned) p_mclk, (unsigned) p_pdm_clk, 
+                        (unsigned) p_mclk, (unsigned) p_pdm_clk,
                         (unsigned) p_pdm_mics, div);
   } else if( N_MICS >= 2 ){
-    mic_array_setup_ddr((unsigned) MIC_ARRAY_CLK1, (unsigned) MIC_ARRAY_CLK2, 
-                        (unsigned) p_mclk, (unsigned) p_pdm_clk, 
+    mic_array_setup_ddr((unsigned) MIC_ARRAY_CLK1, (unsigned) MIC_ARRAY_CLK2,
+                        (unsigned) p_mclk, (unsigned) p_pdm_clk,
                         (unsigned) p_pdm_mics, div );
   } else {
     assert(0);
   }
 
-  
+
 }
 
 static void init_filters(
@@ -91,8 +91,8 @@ void app_mic_array_start()
   if( N_MICS == 1 ){
     mic_array_start_sdr((unsigned) MIC_ARRAY_CLK1);
   } else if( N_MICS >= 2 ){
-    mic_array_start_ddr((unsigned) MIC_ARRAY_CLK1, 
-                        (unsigned) MIC_ARRAY_CLK2, 
+    mic_array_start_ddr((unsigned) MIC_ARRAY_CLK1,
+                        (unsigned) MIC_ARRAY_CLK2,
                         (unsigned) p_pdm_mics );
   }
 }

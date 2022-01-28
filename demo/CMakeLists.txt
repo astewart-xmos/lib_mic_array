@@ -15,9 +15,7 @@ include("${CMAKE_SOURCE_DIR}/lib_mic_array/lib_mic_array.cmake")
 
 add_executable( ${APP_NAME} )
 
-
 set(BUILD_FLAGS
-  "${CMAKE_SOURCE_DIR}/XVF3610_Q60A.xn"
   "-fxscope"
   "-mcmodel=large"
   "-Wno-xcore-fptrgroup"
@@ -27,6 +25,20 @@ set(BUILD_FLAGS
   "-O2"
   "-Wm,--map,memory.map"
 )
+
+if(NOT DEFINED BOARD)
+set(BOARD XVF3610_Q60A)
+endif()
+
+message(STATUS "Building for ${BOARD}")
+
+if(${BOARD} STREQUAL "XVF3610_Q60A")
+    list(APPEND BUILD_FLAGS "${CMAKE_SOURCE_DIR}/XVF3610_Q60A.xn")
+    target_compile_definitions(${APP_NAME} PRIVATE XVF3610_Q60A=1)
+elseif(${BOARD} STREQUAL "XCORE-AI-EXPLORER")
+    list(APPEND BUILD_FLAGS "${CMAKE_SOURCE_DIR}/XCORE-AI-EXPLORER.xn")
+    target_compile_definitions(${APP_NAME} PRIVATE XCOREAI_EXPLORER=1)
+endif()
 
 target_link_options(${APP_NAME} PRIVATE ${BUILD_FLAGS} -w)
 set_target_properties(${APP_NAME} PROPERTIES OUTPUT_NAME ${APP_NAME}.xe)
@@ -57,10 +69,10 @@ unset(APP_SOURCES)
 list( APPEND  APP_SOURCES  ${SOURCES_C}
                            ${SOURCES_XC}
                            ${SOURCES_CPP}
-                           ${SOURCES_ASM}      
+                           ${SOURCES_ASM}
 )
 
-target_sources(${APP_NAME} 
+target_sources(${APP_NAME}
   PRIVATE ${MIC_ARRAY_SOURCES}
   PRIVATE ${APP_SOURCES}
   PRIVATE ${LIB_XS3_MATH_SOURCES}
@@ -68,7 +80,7 @@ target_sources(${APP_NAME}
   PRIVATE ${I2S_HIL_SOURCES}
 )
 
-set_source_files_properties( ${SOURCES_XC}  PROPERTIES LANGUAGE C ) 
+set_source_files_properties( ${SOURCES_XC}  PROPERTIES LANGUAGE C )
 
 target_include_directories(${APP_NAME}
   PRIVATE ${MIC_ARRAY_INCLUDES}

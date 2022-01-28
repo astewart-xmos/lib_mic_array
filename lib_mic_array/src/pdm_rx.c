@@ -10,6 +10,7 @@
 #include <xcore/channel_streaming.h>
 #include <xcore/hwtimer.h>
 #include <xcore/interrupt.h>
+#include <xcore/triggerable.h>
 
 #include <stdint.h>
 #include <assert.h>
@@ -17,6 +18,7 @@
 #include <stdint.h>
 #include <string.h>
 
+extern void pdm_rx_isr(void);
 
 /*
   This struct is allocated directly in pdm_rx_isr.S
@@ -32,15 +34,13 @@ extern struct {
 } pdm_rx_context;
 
 
-
 static inline void deinterleave_pdm_samples(
     uint32_t* samples,
-    const unsigned n_mics, 
+    const unsigned n_mics,
     const unsigned stage2_dec_factor)
 {
-  // unsigned offset = 0;
-
-  switch(n_mics){
+  switch(n_mics)
+  {
     case 1:
       break;
     case 2:
@@ -70,20 +70,18 @@ static inline void shift_buffer(uint32_t* buff)
 
 
 
-
 __attribute__((weak))
 void proc_pcm_user(int32_t pcm_frame[])
 {
   // Do nothing...
 }
 
-
-
 void mic_array_pdm_rx_setup(
     pdm_rx_config_t* config)
 {
 
   streaming_channel_t c_pdm = s_chan_alloc();
+
   assert(c_pdm.end_a != 0 && c_pdm.end_b != 0);
 
   // 32-bits per 96k PCM sample per microphone
@@ -98,35 +96,29 @@ void mic_array_pdm_rx_setup(
   pdm_rx_context.phase1 = pdm_rx_context.phase1_reset;
   pdm_rx_context.c_pdm_in = c_pdm.end_b;
 
-  asm volatile(
-      "setc res[%0], %1       \n"
-      "ldap r11, pdm_rx_isr   \n"
-      "setv res[%0], r11      \n"
-      "eeu res[%0]              "
-        :
-        : "r"(config->stage1.p_pdm_mics), "r"(XS1_SETC_IE_MODE_INTERRUPT)
-        : "r11" );
+  // Let's make sure interrupts are masked before we setup another
+  interrupt_mask_all();
 
+  triggerable_setup_interrupt_callback(config->stage1.p_pdm_mics,NULL,pdm_rx_isr);
+  triggerable_enable_trigger(config->stage1.p_pdm_mics);
   // Note that this does not unmask interrupts on this core
 
 }
 
 
-
-
 // NOTE: When the ISR triggers, it will immediately issue an  `extsp 4` instruction, decrementing the
-//       stack pointer by 4 words (this is how it avoids clobbering registers). That means this 
+//       stack pointer by 4 words (this is how it avoids clobbering registers). That means this
 //       function needs 4 more words of stack space than the compiler will decide it needs.
-//      Unfortunately, I know of no way to force the compiler to automatically set the symbol 
+//      Unfortunately, I know of no way to force the compiler to automatically set the symbol
 //      mic_array_proc_pdm.maxstackwords to 4 more than it would otherwise. So for right now I am
 //      just overriding mic_array_proc_pdm.maxstackwords to a constant much larger than it should
 //      ever need.
 #pragma stackfunction 400
-void mic_array_proc_pdm( 
+void mic_array_proc_pdm(
     pdm_rx_config_t* config )
 {
 
-  // TODO: Not sure whether this should be called inside here or if we should make the 
+  // TODO: Not sure whether this should be called inside here or if we should make the
   //       user call it before this task. I'm just putting it here now for simplicity.
   mic_array_pdm_rx_setup( config );
 
@@ -136,7 +128,7 @@ void mic_array_proc_pdm(
   const unsigned buffA_size_words = config->mic_count * config->stage2.decimation_factor;
 
   // The first stage decimator applies a 256-tap FIR filter for each channel, so we need
-  // a history of 256 PDM samples (8 words) for each microphone. 
+  // a history of 256 PDM samples (8 words) for each microphone.
   // pdm_history is where we keep that filter stage. Its shape is (MIC_COUNT, 8 words)
   uint32_t* pdm_history = &config->stage1.pdm_buffers[2*buffA_size_words];
 
@@ -149,22 +141,22 @@ void mic_array_proc_pdm(
   // samples_out will be passed to proc_pcm_user(). The first MIC_COUNT elements of it will be
   // the next output samples from the second stage decimators.
   int32_t samples_out[MAX_MIC_COUNT] = {0};
-
   // Once we unmask interrupts, the ISR will begin triggering and collecting PDM samples. At
   // that point we need to be ready to pull PDM samples from the ISR via the c_pdm_in chanend.
+
   interrupt_unmask_all();
 
   while(1) {
 
     ////// Wait for the next batch of PDM samples from the ISR.
     // This will deliver enough PDM samples to do a first AND second stage filter
-    // for each microphone channel. (Note: All we're pulling out of the channel itself 
+    // for each microphone channel. (Note: All we're pulling out of the channel itself
     // is a pointer to the PDM buffer.
     uint32_t* pdm_samples = (uint32_t*) s_chan_in_word(pdm_rx_context.c_pdm_in);
 
     ////// De-interleave the channels in the received PDM buffer.
     // Because of the way multi-bit buffered ports work, each word pulled from the port in the ISR
-    // will contain (32/MIC_COUNT) PDM samples for each microphone. In order to update each 
+    // will contain (32/MIC_COUNT) PDM samples for each microphone. In order to update each
     // channel's history (first stage filter state) we need to consolidate the samples for each
     // mic into a single word. This function does that in-place.
     // The input to this function are the raw words pulled from the port in reverse order (i.e.
@@ -196,7 +188,7 @@ void mic_array_proc_pdm(
         // On the last iteration we'll actually produce a new output sample.
         if(k < (config->stage2.decimation_factor-1)){
           xs3_filter_fir_s32_add_sample(&s2_filters[mic], streamA_sample);
-        } else { 
+        } else {
           samples_out[mic] = xs3_filter_fir_s32(&s2_filters[mic], streamA_sample);
         }
       }
@@ -213,7 +205,7 @@ void mic_array_proc_pdm(
 
 /////////// This version hardcodes 1 mic and s2df of 6. Uses significantly fewer MIPS
 // #pragma stackfunction 400
-// void mic_array_proc_pdm( 
+// void mic_array_proc_pdm(
 //     pdm_rx_config_t* config )
 // {
 //   mic_array_pdm_rx_setup( config );

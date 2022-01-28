@@ -29,7 +29,7 @@ unsafe{
 int main() {
 
   chan c_tile_sync;
-  
+
   par {
 
     on tile[0]: {
@@ -37,6 +37,11 @@ int main() {
       // Force it to use xscope, never mind and config.xscope files
       xscope_config_io(XSCOPE_IO_BASIC);
       printf("Running..\n");
+
+#if XCOREAI_EXPLORER
+      unsigned dac_reset;
+      c_tile_sync :> dac_reset;
+#endif
 
       printf("Initializing I2C... ");
       i2c_init();
@@ -51,12 +56,15 @@ int main() {
       // Force it to use xscope, never mind and config.xscope files
       xscope_config_io(XSCOPE_IO_BASIC);
 
+#if XCOREAI_EXPLORER
+      reset_codec();
+      c_tile_sync <: 1;
+#endif
       app_pll_init();
-      
+
       unsigned ready;
       c_tile_sync :> ready;
 
-      
       app_mic_array_setup_resources();
       app_mic_array_start();
 

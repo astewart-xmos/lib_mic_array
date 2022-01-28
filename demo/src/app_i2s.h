@@ -8,8 +8,11 @@
 extern "C" {
 #endif //__XC__
 
-
 void app_i2s_task();
+
+#if XCOREAI_EXPLORER
+void reset_codec(void);
+#endif
 
 
 #ifdef __XC__
