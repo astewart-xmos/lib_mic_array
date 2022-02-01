@@ -18,12 +18,12 @@
 #include <stdint.h>
 #include <string.h>
 
-extern void pdm_rx_isr(void);
-
+// extern void pdm_rx_isr(void);
+#include <xcore/interrupt_wrappers.h>
 /*
   This struct is allocated directly in pdm_rx_isr.S
 */
-extern struct {
+static struct {
   port_t p_pdm_data;
   uint32_t* buffA;
   uint32_t* buffB;
@@ -32,6 +32,49 @@ extern struct {
   chanend_t c_pdm_out;
   chanend_t c_pdm_in;
 } pdm_rx_context;
+
+
+// #include "rtos_printf.h"
+
+#include <xcore/hwtimer.h>
+static hwtimer_t tmr;
+static uint32_t first_run = 0;
+static uint32_t cnter = 0;
+
+DEFINE_INTERRUPT_CALLBACK(mic_array_isr_cb_grp, pdm_rx_isr, arg)
+{
+    uint32_t p_val;
+    uint32_t p_val2;
+
+    if (first_run == 0) {
+        first_run =  hwtimer_get_time(tmr);
+    }
+    p_val = port_in(pdm_rx_context.p_pdm_data);
+
+    cnter++;
+    if (cnter > 10)
+    {
+         printf("10 iters now %d start %d\n", hwtimer_get_time(tmr) , first_run);
+        // cnter = 0;
+    }
+    // _Exit(0);
+                // p_val = port_in(pdm_rx_context.p_pdm_data);
+    // printf("-*******in isr %d\n", p_val);
+    uint32_t *bufA_ptr = pdm_rx_context.buffA ;
+    bufA_ptr[pdm_rx_context.phase1] = p_val;
+    if(pdm_rx_context.phase1) {
+        pdm_rx_context.phase1--;
+    } else {
+        pdm_rx_context.phase1 = pdm_rx_context.phase1_reset;
+        uint32_t *tmp_ptr = pdm_rx_context.buffA;
+        pdm_rx_context.buffA = pdm_rx_context.buffB;
+        pdm_rx_context.buffB = tmp_ptr;
+        s_chan_out_word(pdm_rx_context.c_pdm_out, (uint32_t)tmp_ptr);
+    }
+    // if(bits > 32)
+    // printf("-*******in isr %d\n", bits);
+    // printf("-*******done isr\n");
+}
 
 
 static inline void deinterleave_pdm_samples(
@@ -79,7 +122,7 @@ void proc_pcm_user(int32_t pcm_frame[])
 void mic_array_pdm_rx_setup(
     pdm_rx_config_t* config)
 {
-
+tmr = hwtimer_alloc();
   streaming_channel_t c_pdm = s_chan_alloc();
 
   assert(c_pdm.end_a != 0 && c_pdm.end_b != 0);
@@ -98,14 +141,21 @@ void mic_array_pdm_rx_setup(
 
   // Let's make sure interrupts are masked before we setup another
   interrupt_mask_all();
-
-  triggerable_setup_interrupt_callback(config->stage1.p_pdm_mics,NULL,pdm_rx_isr);
+  // asm volatile(
+  //      "setc res[%0], %1       \n"
+  //      "ldap r11, pdm_rx_isr   \n"
+  //      "setv res[%0], r11      \n"
+  //      "eeu res[%0]              "
+  //        :
+  //        : "r"(config->stage1.p_pdm_mics), "r"(XS1_SETC_IE_MODE_INTERRUPT)
+  //        : "r11" );
+  triggerable_setup_interrupt_callback(config->stage1.p_pdm_mics,NULL,INTERRUPT_CALLBACK(pdm_rx_isr));
   triggerable_enable_trigger(config->stage1.p_pdm_mics);
   // Note that this does not unmask interrupts on this core
 
 }
 
-
+// DECLARE_INTERRUPT_PERMITTED(void, mic_array_proc_pdm_int, pdm_rx_config_t* config);
 // NOTE: When the ISR triggers, it will immediately issue an  `extsp 4` instruction, decrementing the
 //       stack pointer by 4 words (this is how it avoids clobbering registers). That means this
 //       function needs 4 more words of stack space than the compiler will decide it needs.
@@ -113,14 +163,20 @@ void mic_array_pdm_rx_setup(
 //      mic_array_proc_pdm.maxstackwords to 4 more than it would otherwise. So for right now I am
 //      just overriding mic_array_proc_pdm.maxstackwords to a constant much larger than it should
 //      ever need.
-#pragma stackfunction 400
+// void mic_array_proc_pdm(
+//     pdm_rx_config_t* config )
+// {
+//     mic_array_proc_pdm_int(config);
+// }
+
 void mic_array_proc_pdm(
     pdm_rx_config_t* config )
 {
-
+// printf("call setup\n");
   // TODO: Not sure whether this should be called inside here or if we should make the
   //       user call it before this task. I'm just putting it here now for simplicity.
   mic_array_pdm_rx_setup( config );
+  // printf("setup done\n");
 
   // Just as a convenience for the user, the PDM receive buffers and PDM history buffers are
   // provided as one long buffer (see MA_PDM_BUFFER_SIZE_WORDS()). This constant just tells
@@ -143,7 +199,7 @@ void mic_array_proc_pdm(
   int32_t samples_out[MAX_MIC_COUNT] = {0};
   // Once we unmask interrupts, the ISR will begin triggering and collecting PDM samples. At
   // that point we need to be ready to pull PDM samples from the ISR via the c_pdm_in chanend.
-
+// rtos_printf("unmask isrs\n");
   interrupt_unmask_all();
 
   while(1) {
@@ -153,7 +209,8 @@ void mic_array_proc_pdm(
     // for each microphone channel. (Note: All we're pulling out of the channel itself
     // is a pointer to the PDM buffer.
     uint32_t* pdm_samples = (uint32_t*) s_chan_in_word(pdm_rx_context.c_pdm_in);
-
+// rtos_printf("got samples\n");
+// printf("got samples");
     ////// De-interleave the channels in the received PDM buffer.
     // Because of the way multi-bit buffered ports work, each word pulled from the port in the ISR
     // will contain (32/MIC_COUNT) PDM samples for each microphone. In order to update each

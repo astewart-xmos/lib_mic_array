@@ -25,6 +25,9 @@
 
 unsafe{
 
+extern "C" {
+void __xcore_interrupt_permitted_ugs_cmain(void);
+}
 
 int main() {
 
@@ -69,7 +72,7 @@ int main() {
       app_mic_array_start();
 
       par {
-        app_mic_array_task();
+        __xcore_interrupt_permitted_ugs_cmain();
 #if !(MEASURE_MIPS)
         app_i2s_task();
 #else

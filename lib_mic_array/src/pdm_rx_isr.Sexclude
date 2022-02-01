@@ -5,7 +5,7 @@
 
 #include "xs1.h"
 
-/*  
+/*
 
   File contains the ISR logic for capturing PDM samples coming in.
 
@@ -31,9 +31,13 @@ pdm_rx_context:
 #define NSTACKWORDS     4
 
 
+.weak _fptrgroup.mic_array_isr_grp.nstackwords.group
+.add_to_set _fptrgroup.mic_array_isr_grp.nstackwords.group
+
 .text
 .issue_mode single
 .align 16         // 16-byte alignment guarantees that FNOPs always happen in the same spots
+
 
 #define A   r4
 #define B   r5
@@ -45,8 +49,13 @@ pdm_rx_context:
 pdm_rx_isr:
 
     extsp 4                     // 2
-    std r4, r5, sp[0]           // 4
-    std r6, r7, sp[1]           // 4
+    //std r4, r5, sp[0]           // 4
+    //std r6, r7, sp[1]           // 4
+
+    stw r4, sp[0]           // 4
+    stw r5, sp[1]           // 4
+    stw r6, sp[2]           // 4
+    stw r7, sp[3]           // 4
     ldw A, dp[.L_port]          // 2
     in A, res[A]                // 2
     ldw D, dp[.L_buffA]         // 2
@@ -55,8 +64,13 @@ pdm_rx_isr:
     bf C, .L_emit               // 2
     sub C, C, 1                 // 2
     stw C, dp[.L_phase1]        // 2
-    ldd r6, r7, sp[1]           // 4 
-    ldd r4, r5, sp[0]           // 4
+    //ldd r6, r7, sp[2]           // 4
+    //ldd r4, r5, sp[1]           // 4
+
+    ldw r7, sp[3]           // 4
+    ldw r6, sp[2]           // 4
+    ldw r5, sp[1]           // 4
+    ldw r4, sp[0]           // 4
     ldaw sp, sp[NSTACKWORDS]    // 2
     kret                        // 4
 
@@ -77,8 +91,12 @@ pdm_rx_isr:
     out res[A], D
 
   // And we're done
-    ldd r6, r7, sp[1]
-    ldd r4, r5, sp[0]
+    //ldd r6, r7, sp[1]
+    //ldd r4, r5, sp[0]
+    ldw r7, sp[3]           // 4
+    ldw r6, sp[2]           // 4
+    ldw r5, sp[1]           // 4
+    ldw r4, sp[0]           // 4
     ldaw sp, sp[NSTACKWORDS]
     kret
 
@@ -92,5 +110,3 @@ pdm_rx_isr:
 // .size pdm_rx_isr, .L_func_end - pdm_rx_isr
 
 #endif //defined(__XS3A__)
-
-

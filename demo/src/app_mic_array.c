@@ -31,15 +31,14 @@ struct {
 // MCLK connected to pin 14 --> X1D11 --> port 1D
 // MIC_CLK connected to pin 39 --> X1D22 --> port 1G
 // MIC_DATA connected to pin 32 --> X1D13 --> port 1F
-on tile[1]: in port p_mclk                     = XS1_PORT_1D;
-on tile[1]: out port p_pdm_clk                 = XS1_PORT_1G;
-on tile[1]: in buffered port:32 p_pdm_mics     = XS1_PORT_1F;
+port_t p_mclk     = XS1_PORT_1D;
+port_t p_pdm_clk  = XS1_PORT_1G;
+port_t p_pdm_mics = XS1_PORT_1F;
 
 
 // Divider to bring the 24.576 MHz clock down to 3.072 MHz
 #define MCLK_DIV  8
 
-unsafe {
 
 void app_mic_array_setup_resources()
 {
@@ -97,11 +96,16 @@ void app_mic_array_start()
   }
 }
 
+#include <xcore/interrupt_wrappers.h>
 
-void app_mic_array_task()
+// DEFINE_INTERRUPT_PERMITTED(mic_array_isr_cb_grp, void, app_mic_array_task)
+// {
+// }
+
+// void __xcore_interrupt_permitted_ugs_cmain(void);
+
+DEFINE_INTERRUPT_PERMITTED(mic_array_isr_cb_grp, void, cmain)
 {
   init_filters( &ma_config );
   mic_array_proc_pdm( &ma_config );
 }
-
-} //unsafe
